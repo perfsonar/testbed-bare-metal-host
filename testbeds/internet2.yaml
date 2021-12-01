@@ -1,0 +1,44 @@
+#
+# Internet2 Testbed Configuration
+#
+
+# NOTE: The bridge interfaces for eth1 and eth2 are swapped because
+# there's a problem at I2 with the bit of network that;s connected to
+# enp6s0f0.
+
+
+# Domain for all hosts
+domain: ps.dev.internet2.edu
+
+
+# Network
+
+net:
+
+  # The first three hosts in each block are dedicated to the gateway.
+
+  eth1:
+    # Was enp6s0f0
+    bridge: enp6s0f1
+    ip:
+      4:
+        block: 163.253.37.192/27
+        default: 163.253.37.193
+        base: 4
+      6:
+        block: 2001:0468:2620:0030::/100
+        default: 2001:0468:2620:0030::1
+        base: 4
+  
+  eth2:
+    # Was enp6s0f1
+    bridge: enp6s0f0
+    ip:
+      4:
+        block: 163.253.37.160/27
+        #default: 163.253.37.161
+        base: 4
+      6:
+        block: 2001:0468:2620:0031::/100
+        #default: 2001:0468:2620:0031::1
+        base: 4

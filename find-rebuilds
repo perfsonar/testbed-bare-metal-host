@@ -1,0 +1,17 @@
+#!/usr/bin/ruby
+#
+# Print a list of all hosts in the configuration file that have
+# "rebuild" set true.
+#
+require 'yaml'
+
+config = YAML.load(STDIN)
+
+rebuild_default = config["defaults"].fetch("rebuild", false)
+
+config["hosts"].each do |host_name, host_config|
+  if host_config.fetch("rebuild", rebuild_default)
+    print "#{host_name}\n"
+  end
+end
+
