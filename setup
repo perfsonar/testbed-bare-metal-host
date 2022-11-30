@@ -1,0 +1,52 @@
+#!/bin/sh
+#
+# Initial system setup for bare metal perfSONAR test bed host
+#
+
+die()
+{
+    echo "$@" 2>&1
+    exit 1
+}
+
+if [ "$(id -nu)" != "root" ]
+then
+   die "This program must be run as root."
+fi
+
+if [ -e "/etc/redhat-release" ]
+then
+
+    echo "Setting up something Red Hat-flavored"
+
+    yum -y update
+    yum install -y yum-utils
+    yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+    yum -y install vagrant make
+
+elif [ -e "/etc/debian_version" ]
+then
+
+    echo "Setting up something Debian-flavored"
+
+    apt -y update
+    apt -y upgrade
+    
+    wget -O- https://apt.releases.hashicorp.com/gpg \
+	| gpg --dearmor \
+	> tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
+
+    echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg]" \
+	 "https://apt.releases.hashicorp.com $(lsb_release -cs) main" \
+	> /etc/apt/sources.list.d/hashicorp.list
+
+    apt update
+    apt -y install vagrant make
+
+else
+
+    die "No idea how to support this OS.  Sorry."
+
+fi
+
+echo "Setup was Successful."
