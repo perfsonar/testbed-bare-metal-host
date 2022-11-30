@@ -15,8 +15,7 @@ require 'yaml'
 # Configuration
 #
 
-$config =    YAML.load(File.read("config.yaml"))
-$config["testbed"] = YAML.load(File.read("testbeds/#{$config["testbed"]}.yaml"))
+$config = YAML.load(File.read("config.yaml"))
 
 def get_with_default(config_bits, param)
   if config_bits == nil
@@ -25,6 +24,8 @@ def get_with_default(config_bits, param)
   return config_bits.fetch(param, $config["defaults"].fetch(param, nil))
 end
 
+
+$box_interfaces = YAML.load(File.read("box-interfaces.yaml"))
 
 
 #
@@ -72,8 +73,10 @@ Vagrant.configure("2") do |vc|
       end
 
       host.vm.box = get_with_default(host_config, "box")
-      if $config["testbed"].key?("domain")
-        host.vm.hostname = "#{host_name}.#{$config["testbed"]["domain"]}"
+      domain = get_with_default(host_config, "domain")
+
+      if $domain != nil
+        host.vm.hostname = "#{host_name}.#{$config["defaults"]["domain"]}"
       else
         host.vm.hostname = host_name
       end
@@ -86,14 +89,20 @@ Vagrant.configure("2") do |vc|
       route_table_base = 10
       route_table_num = route_table_base
 
-      $config["testbed"]["net"].each do |key, value|
+      $config["net"].each_with_index do |value, index|
     
         host_if = value["bridge"]
-        guest_if = key
+        guest_if = $box_interfaces[host.vm.box][index]
+        if guest_if == nil
+          abort("Unable for find interface #{index} on #{host.vm.box}")
+        end
         vc.vm.network "public_network", bridge: host_if, auto_config: false
     
         host.vm.provision "network-route-flush-#{guest_if}-#{route_table_num}", type: "shell", run: "once", inline: <<-SHELL
-          ip route flush table #{route_table_num}
+          if ip rule list | cut -d: -f1 | fgrep -q -x "#{route_table_num}"
+          then
+              ip route flush table #{route_table_num}
+          fi
         SHELL
     
         [ 4, 6 ].each do |family|
@@ -134,24 +143,26 @@ Vagrant.configure("2") do |vc|
     
           # Default Routes (later entries override earlier ones)
     
-          default = net_entry["default"]
-          next if default == nil
+          gateway = net_entry["gateway"]
+          next if gateway == nil
     
           host.vm.provision "network-routing-#{guest_if}-ipv#{family}", type: "shell", run: "once", inline: <<-SHELL
+
+            # TODO: This doesn't make the changes permanent across reboots.
     
             defroute()
             {
                 ip -#{family} route list table #{route_table_num} | egrep -e '^default '
             }
-            OLD_DEFAULT=$(defroute)
-            if [ -n "${OLD_DEFAULT}" ]
+            OLD_GATEWAY=$(defroute)
+            if [ -n "${OLD_GATEWAY}" ]
             then
-                echo "Replacing existing default route ${OLD_DEFAULT}"
+                echo "Replacing existing default route ${OLD_GATEWAY}"
                 ip -#{family} route del default table #{route_table_num}
             fi
     
             # Traffic sourced from this interface goes out the same way.
-            ip -#{family} route add default via "#{default}" dev "#{guest_if}" table #{route_table_num}
+            ip -#{family} route add default via "#{gateway}" dev "#{guest_if}" table #{route_table_num}
             ip -#{family} rule add from #{addr} table #{route_table_num}
     
             # The global default route is via the first interface.
@@ -159,14 +170,14 @@ Vagrant.configure("2") do |vc|
             then
                 ip -#{family} route list | egrep -e '^default ' \
                   && ip -#{family} route del default
-                ip -#{family} route add default via "#{default}" dev "#{guest_if}"
-                echo "Global IPv#{family} default route via #{default} on #{guest_if}"
+                ip -#{family} route add default via "#{gateway}" dev "#{guest_if}"
+                echo "Global IPv#{family} default route via #{gateway} on #{guest_if}"
             fi
           SHELL
     
         end  # [ 4, 6 ].each do |family|
 
-      end  # $config["testbed"].each do |key, value|
+      end  # $config["net"].each do |key, value|
 
       host.vm.provision "hosts-scrub", type: "shell", run: "once", inline: <<-SHELL
         sed -i -e '/#{host.vm.hostname}/d' /etc/hosts
@@ -174,76 +185,40 @@ Vagrant.configure("2") do |vc|
 
 
       #
-      # perfSONAR
-      #
-      # TODO: Replace this with Ansible, which can detect Debian
+      # Ansible
       #
 
-      host.vm.provision "perfSONAR", type:"shell", run: "once", inline: <<-SHELL
+      host.vm.provision "ansible-#{host.vm.hostname}", type:"shell", run: "always", inline: <<-SHELL
 
         set -e
 
-        if [ ! -e "/etc/redhat-release" ]
+        ANSIBLE_USER="#{get_with_default(host_config,"ansible")["user"]}"
+        if ! getent passwd "${ANSIBLE_USER}" > /dev/null
         then
-          echo "Only CentOS is supported at this time." 1>&2
-          exit 1
+            useradd --system -c "Ansible" "${ANSIBLE_USER}"
         fi
- 
-        YUMMY="yum -y"
- 
-        ${YUMMY} install epel-release
-        echo INST
-        ${YUMMY} install "#{$config["perfsonar-repo"]}"
-        echo DONE
- 
-        echo "Build config is #{host_config["repository"]}"
- 
-        case "#{host_config["repository"]}" in
-          production)
-            true  # Nothing to do here.
-            ;;
-          nightly-patch|nightly-minor|staging)
-            ${YUMMY} install "perfSONAR-repo-#{host_config["repository"]}"
-            ;;
-          *)
-            echo "Unknown repository '#{host_config["repository"]}'" 1>&2
-            exit 1
-        esac
- 
-        ${YUMMY} clean all
-        ${YUMMY} update
-        ${YUMMY} install perfsonar-toolkit
- 
+
+        SSH_DIR=~ansible/.ssh
+        mkdir -p "${SSH_DIR}"
+        chmod 700 "${SSH_DIR}"
+        chown "${ANSIBLE_USER}.${ANSIBLE_USER}" "${SSH_DIR}"
+
+        AUTHORIZED_KEYS_BUILD="$(mktemp)"
+        chmod 600 "${AUTHORIZED_KEYS_BUILD}"
+        chown "${ANSIBLE_USER}.${ANSIBLE_USER}" "${AUTHORIZED_KEYS_BUILD}"
+
+        cat > "${AUTHORIZED_KEYS_BUILD}" <<EOF
+        #{get_with_default(host_config, "ansible")["keys"].join("\n")}
+EOF
+        sed -i -e 's/^[[:space:]]*//' "${AUTHORIZED_KEYS_BUILD}"
+
+        mv -f "${AUTHORIZED_KEYS_BUILD}" "${SSH_DIR}/authorized_keys"
+
         # Disable SSH root login
         sed -i -e 's/PermitRootLogin.*$/PermitRootLogin no/g' /etc/ssh/sshd_config
         systemctl restart sshd
 
-	# Install self-updating limit configuration
-        ${YUMMY} install git
-	git clone https://github.com/perfsonar/perfsonar-dev-mesh.git
-	make -C perfsonar-dev-mesh/pscheduler install
-	rm -rf perfsonar-dev-mesh
-
       SHELL
-
-      #
-      # Join the test meshes
-      #
-
-      # TODO: This appears to run for every host instead of just this one.
-
-      meshes = get_with_default(host_config, "meshes")
-      get_with_default(host_config, "meshes").each do |mesh|
-        host.vm.provision "#{host_name}-mesh-#{mesh}", type: "shell", run: "once", inline: <<-SHELL
-          psconfig remote --configure-archives add "#{mesh}"
-        SHELL
-      end
-
-      if meshes.length > 0
-        host.vm.provision "#{host_name}-psconfig-reload", type: "shell", run: "once", inline: <<-SHELL
-          systemctl restart psconfig-pscheduler-agent
-        SHELL
-      end
 
     end  # vc.vm.define name
 

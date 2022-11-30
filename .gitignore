@@ -1,0 +1,7 @@
+# Things that get ignored
+
+# This will contain site-specific data.
+config.yaml
+
+.vagrant
+*~

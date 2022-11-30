@@ -10,8 +10,10 @@ config = YAML.load(STDIN)
 rebuild_default = config["defaults"].fetch("rebuild", false)
 
 config["hosts"].each do |host_name, host_config|
+  if host_config == nil
+    host_config = {}
+  end
   if host_config.fetch("rebuild", rebuild_default)
     print "#{host_name}\n"
   end
 end
-
