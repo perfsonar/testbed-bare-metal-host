@@ -3,6 +3,9 @@
 # Initial system setup for bare metal perfSONAR test bed host
 #
 
+# Currently-supported version of VirtualBox.
+VBOX_VERSION=6.1
+
 die()
 {
     echo "$@" 2>&1
@@ -20,19 +23,34 @@ then
     echo "Setting up something Red Hat-flavored"
 
     yum -y update
+    
+    # Install VirtualBox    
+    rpm --import https://www.virtualbox.org/download/oracle_vbox.asc
+    curl -s -o /etc/yum.repos.d/virtualbox.repo \
+	 https://download.virtualbox.org/virtualbox/rpm/el/virtualbox.repo
+    yum -y makecache
+    yum -y install VirtualBox-${VBOX_VERSION}
+
+    # Install Vagrant
     yum install -y yum-utils
     yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
-    yum -y install vagrant make
+    yum -y install vagrant git make kernel-devel
 
 elif [ -e "/etc/debian_version" ]
 then
 
     echo "Setting up something Debian-flavored"
 
+    echo
+    echo "*** WARNING:  THIS IS UNTESTED***"
+    echo
+
     apt -y update
     apt -y upgrade
+
+    # TODO: Install VirtualBox
     
-    wget -O- https://apt.releases.hashicorp.com/gpg \
+    curl -s https://apt.releases.hashicorp.com/gpg \
 	| gpg --dearmor \
 	> tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
 
@@ -41,7 +59,7 @@ then
 	> /etc/apt/sources.list.d/hashicorp.list
 
     apt update
-    apt -y install vagrant make
+    apt -y install vagrant git make kernel-devel
 
 else
 
@@ -49,4 +67,23 @@ else
 
 fi
 
+
+rm -f "/lib/modules/$(uname -r)/build"
+ln -s "/usr/src/kernels/$(uname -r)" "/lib/modules/$(uname -r)/build"
+/sbin/vboxconfig
+
+TESTBED_USER=testbed
+if ! getent passwd "${TESTBED_USER}" > /dev/null
+then
+    useradd -c 'perfSONAR Testbed' testbed
+fi
+
+su - "${TESTBED_USER}" -c "vagrant plugin install netaddr"
+
+TESTBED_HOME=$(getent passwd "${TESTBED_USER}" | cut -d: -f 6)
+su - "${TESTBED_USER}" -c "git -C '${TESTBED_HOME}' clone https://github.com/perfsonar/testbed-bare-metal-host.git"
+
 echo "Setup was Successful."
+echo "Configuration is in ${TESTBED_HOME}/testbed-bare-metal-host." 
+
+exit 0
