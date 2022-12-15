@@ -43,6 +43,8 @@ Vagrant.configure("2") do |vc|
   end
 
 
+  vc.vm.synced_folder ".", "/vagrant"
+
   # The fisrt iteration will bump this to zero
 
   $hosts = $config.fetch("hosts", {}).to_a
@@ -86,25 +88,32 @@ Vagrant.configure("2") do |vc|
       # Network
       #
 
+      route_policy_service = "route-policy"
+      libexec = "/usr/libexec/#{route_policy_service}"
+
+      vc.vm.provision "route-policy-utils", type: "shell", run: "always", inline: <<-SHELL
+          mkdir -p '#{libexec}'
+	  cp '/vagrant/route-policy/setup-interface' '#{libexec}'
+          chmod 555 "#{libexec}/setup-interface"
+      SHELL
+
       route_table_base = 10
       route_table_num = route_table_base
 
       $config["net"].each_with_index do |value, index|
     
         host_if = value["bridge"]
-        guest_if = $box_interfaces[host.vm.box][index]
+
+        if $box_interfaces[host.vm.box] == nil
+          abort "#{host_name}: No support for #{host.vm.box} in box-interfaces.yaml."
+        end
+
+        guest_if = $box_interfaces[host.vm.box][index]        
         if guest_if == nil
           abort("Unable for find interface #{index} on #{host.vm.box}")
         end
         vc.vm.network "public_network", bridge: host_if, auto_config: false
-    
-        host.vm.provision "network-route-flush-#{guest_if}-#{route_table_num}", type: "shell", run: "once", inline: <<-SHELL
-          if ip rule list | cut -d: -f1 | fgrep -q -x "#{route_table_num}"
-          then
-              ip route flush table #{route_table_num}
-          fi
-        SHELL
-    
+       
         [ 4, 6 ].each do |family|
     
           net_entry = value["ip"][family]
@@ -121,6 +130,8 @@ Vagrant.configure("2") do |vc|
           else
             raise "Internal error: Unknown IP family #{family}"
           end
+
+          net_cidr_size = net.netmask.prefix_len
     
           # Addressing
 
@@ -135,47 +146,41 @@ Vagrant.configure("2") do |vc|
           end
           
           addr = net.nth(address_number)
-
-          host.vm.provision "network-#{guest_if}-ipv#{family}", type: "shell", run: "once", inline: <<-SHELL
-            ip -#{family} address replace #{addr}#{net.netmask} dev #{guest_if}
-            ip -#{family} address show dev #{guest_if}
-          SHELL
     
           # Default Routes (later entries override earlier ones)
-    
-          gateway = net_entry["gateway"]
-          next if gateway == nil
-    
+
+          gateway = net_entry.fetch("gateway", "")
+
+          if_service = "route-policy-#{guest_if}-ipv#{family}"
+          service_file = "/usr/lib/systemd/system/#{if_service}.service"
+
+          if net_entry.fetch("default", false)
+            default_route_arg = "--global-default-route"
+          else
+            default_route_arg = ""
+          end
+  
           host.vm.provision "network-routing-#{guest_if}-ipv#{family}", type: "shell", run: "once", inline: <<-SHELL
 
-            # TODO: This doesn't make the changes permanent across reboots.
-    
-            defroute()
-            {
-                ip -#{family} route list table #{route_table_num} | egrep -e '^default '
-            }
-            OLD_GATEWAY=$(defroute)
-            if [ -n "${OLD_GATEWAY}" ]
-            then
-                echo "Replacing existing default route ${OLD_GATEWAY}"
-                ip -#{family} route del default table #{route_table_num}
-            fi
-    
-            # Traffic sourced from this interface goes out the same way.
-            ip -#{family} route add default via "#{gateway}" dev "#{guest_if}" table #{route_table_num}
-            ip -#{family} rule add from #{addr} table #{route_table_num}
-    
-            # The global default route is via the first interface.
-            if [ "#{route_table_num}" -eq "#{route_table_base}" ]
-            then
-                ip -#{family} route list | egrep -e '^default ' \
-                  && ip -#{family} route del default
-                ip -#{family} route add default via "#{gateway}" dev "#{guest_if}"
-                echo "Global IPv#{family} default route via #{gateway} on #{guest_if}"
-            fi
+            sed \
+              -e 's|__PROGRAM__|#{libexec}/setup-interface|g' \
+	      -e 's|__GLOBAL_DEFAULT__|#{default_route_arg}|g' \
+              -e 's|__INTERFACE__|#{guest_if}|g' \
+              -e 's|__FAMILY__|#{family}|g' \
+              -e 's|__ADDR__|#{addr}|g' \
+              -e 's|__NET_SIZE__|#{net_cidr_size}|g' \
+              -e 's|__GATEWAY__|#{gateway}|g' \
+              -e 's|__ROUTE_TABLE_NUM__|#{route_table_num}|g' \
+              '/vagrant/route-policy/#{route_policy_service}.service.raw' \
+              > '#{service_file}'
+
+            systemctl enable --now '#{if_service}'
+
           SHELL
     
         end  # [ 4, 6 ].each do |family|
+
+        route_table_num += 1
 
       end  # $config["net"].each do |key, value|
 

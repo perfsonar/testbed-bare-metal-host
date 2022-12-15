@@ -1,0 +1,18 @@
+[Unit]
+Description=Interface __INTERFACE__ Routing Policy
+
+[Service]
+Type=oneshot
+
+# Redirections
+StandardOutput=journal
+StandardError=journal
+
+# Start service
+User=root
+Group=root
+ExecStart=__PROGRAM__ __GLOBAL_DEFAULT__ '__INTERFACE__' '__FAMILY__' '__ADDR__' '__NET_SIZE__' '__GATEWAY__' '__ROUTE_TABLE_NUM__'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

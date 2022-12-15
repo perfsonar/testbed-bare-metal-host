@@ -3,10 +3,25 @@
 This directory contains infrastructure for running a multi-VM system
 as part of the perfSONAR test bed.
 
+## Prerequisites
+
+ * Bare-metal system running a recent RHEL- or Debian-derived Linux
+
 
 ## Theory of Operation
 
-TODO: Write this
+The system's job is to host multiple VirtualBox VMs that serve as
+test bed systems,  
+
+The system should have at least two network interfaces:
+
+ * **Inside** - Used to reach the host via SSH for administrative
+     purposes.
+ 
+ * **Outside** - Use by the VMs to reach the Internet.
+
+The two interfaces may be different VLANs on the same physical
+interface if desired.
 
 
 ## System Setup

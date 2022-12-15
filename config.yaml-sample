@@ -17,20 +17,23 @@ net:
   # as examples and will not result in a useful VM because they are
   # unlikely to be able to reach the Internet.
 
-  # Note that the global default gateway will be on the first of these
-  # interfaces if it has a default route configured.  Othewise, any
-  # VMs created based on this testbed will have no default route.
+  # Each of these interfaces will be given routing policy that gives
+  # any traffic originating on them will use that interface's gateway
+  # as a default route.  The VM's overall default route will remain
+  # the NAT interface provided by VirtualBox.
 
   - bridge: enp6s0f0                  # Bridge to this interface on the host
     ip:
       4:
         block: 192.0.2.0/29           # IPv4 network block
-        gateway: 192.0.2.1            # IPv4 default gateway
-        base: 2                       # First host in block to use
+        gateway: 192.0.2.1            # IPv4 gateway for this network
+        base: 2                       # First host in block to use for VMs
+        default: true                 # Point the global default route here.
       6:
         block: 2001:0db8:0001::/125   # IPv6 network block
-        gateway: 2001:0db8:0001::1    # IPv6 default gateway
-        base: 2                       # First host in block to use
+        gateway: 2001:0db8:0001::1    # IPv6 gateway for this network
+        base: 2                       # First host in block to use for VMs
+        default: true                 # Point the global default route here.
 
   - bridge: enp6s0f1
     ip:
@@ -61,22 +64,23 @@ defaults:
   # scheme without configuring a VM.  
   skip: false
 
-  # Basic system attributes
+  # Basic VM attributes
   box: generic/debian10
   cpus: 4
   memory: 4096
 
-  # Rebuild nightly
+  # Rebuild the VM once daily
   rebuild: false
 
   # DNS domain for the host
   domain: ps.net.example.org
 
 
+  # Information used to configure the Ansible account
   ansible:
 
     # User that will carry out actions on Ansible's behalf.  This
-    # account will be given unfettered access to sudo.    
+    # account will be given unfettered access to sudo.
     user: ansible
 
     # SSH public keys to authorize for the Ansible user
@@ -97,27 +101,32 @@ hosts:
   # the first of which is the gateway.
 
   # Note that all hosts will be named based on their name and the
-  # value of the 'domain' pair (e.g., host3.ps.example.org).
+  # value of the 'domain' pair (e.g., host3.ps.net.example.org).
 
   # Host 1 is the gateway, which is skipped because the networks are
   # configured to start allocating from host 2.
 
   # Host 2
-  host2:
+  argle:
     # No changes from the defaults
 
-  host3:
+  # Host 3
+  bargle:
+    box: almalinux/8
     rebuild: true
 
-  host4:
+  # Host 4
+  fargle:
     # No changes from the defaults
 
-  host5:
+  # Host 5
+  gargle:
     rebuild: true
 
   # This is a placeholder for the remaining host in the block.  While
   # not required, maintaining these helps understand the inventory of
   # available addresses.
 
-  host6:
+  # Host 6
+  zargle:
     skip: true

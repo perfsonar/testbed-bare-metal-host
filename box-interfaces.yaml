@@ -1,7 +1,7 @@
 # List of bridgeable interfaces by Vagrant box type
 
 {
-  "amlalinux/8": [
+  "almalinux/8": [
     # Vagrant uses enp0s3 for NAT
     "enp0s8",
     "enp0s9",

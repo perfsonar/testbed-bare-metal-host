@@ -1,0 +1,90 @@
+#!/bin/sh -e
+
+# Configure default routing policy for an interface
+#
+# Arguments:
+#  1 - Interface
+#  2 - IP address family (4 or 6)
+#  3 - Interface address
+#  4 - Network size in bits (e.g., /28 or /64).
+#  5 - Gateway address
+#  6 - Routing table number
+#  7 - Routning table label (optional)
+
+# -----------------------------------------------------------------------------
+
+# Gargle options and arguments
+
+GLOBAL_DEFAULT_ROUTE=false
+
+while echo "$1" | egrep -q -e '^--'
+do
+    OPTION=$1
+    shift
+
+    case "${OPTION}" in
+	--global-default-route|-g)
+	    GLOBAL_DEFAULT_ROUTE=true
+	    ;;
+
+	--)
+	    die "Unknown option ${OPTION}."
+	    ;;
+    esac
+done
+
+INTERFACE="$1"
+FAMILY="$2"
+ADDR="$3"
+NET_SIZE="$4"
+GATEWAY="$5"
+ROUTE_TABLE_NUM="$6"
+ROUTE_TABLE_LABEL="$7"
+
+# -----------------------------------------------------------------------------
+
+do_ip()
+{
+    echo EXEC ip "-${FAMILY}" "$@"
+    ip "-${FAMILY}" "$@"
+}
+
+
+# Some systems disable IPv6 by default.
+if [ "${FAMILY}" = '6' ]
+then
+    sysctl -w "net.ipv${FAMILY}.conf.${INTERFACE}.disable_ipv${FAMILY}=0"
+fi
+
+do_ip address replace "${ADDR}/${NET_SIZE}" dev "${INTERFACE}"
+ip link set dev "${INTERFACE}" up
+
+# Traffic sourced from this interface goes out the same way.
+
+# This is optional.  Just gives it a nice name.
+sed -i -e "/^${ROUTE_TABLE_NUM}\\s/d" /etc/iproute2/rt_tables
+if [ -n "${ROUTE_TABLE_LABEL}" ]
+then
+    echo "${ROUTE_TABLE_NUM} ${ROUTE_TABLE_LABEL}" >> /etc/iproute2/rt_tables
+fi
+
+if [ -n "${GATEWAY}" ]
+then
+    # This is okay if it fails.
+    do_ip route flush table "${ROUTE_TABLE_NUM}" \
+	|| echo "Route table ${ROUTE_TABLE_NUM} doesn't exist yet.  No problem."
+
+    do_ip route add default via "${GATEWAY}" dev "${INTERFACE}" table "${ROUTE_TABLE_NUM}"
+    do_ip rule add from ${ADDR} table "${ROUTE_TABLE_NUM}"
+fi
+
+# The global default is still out this interface
+if ${GLOBAL_DEFAULT_ROUTE}
+then
+    # TODO: Need to grep this out of the table before trying it.
+    if do_ip route | egrep -q -e '^default\s+'
+    then
+	do_ip route del default
+    fi
+    do_ip route add default via "${GATEWAY}" dev "${INTERFACE}"
+fi
