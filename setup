@@ -4,7 +4,7 @@
 #
 
 # Currently-supported version of VirtualBox.
-VBOX_VERSION=6.1
+VBOX_VERSION=7.0
 
 die()
 {
@@ -22,19 +22,24 @@ then
 
     echo "Setting up something Red Hat-flavored"
 
-    yum -y update
-    
-    # Install VirtualBox    
+    # Install VirtualBox
     rpm --import https://www.virtualbox.org/download/oracle_vbox.asc
-    curl -s -o /etc/yum.repos.d/virtualbox.repo \
-	 https://download.virtualbox.org/virtualbox/rpm/el/virtualbox.repo
-    yum -y makecache
-    yum -y install VirtualBox-${VBOX_VERSION}
-
+    dnf -y install dnf-utils
+    yum-config-manager --add-repo https://download.virtualbox.org/virtualbox/rpm/el/virtualbox.repo
+    dnf -y makecache
+    dnf -y install \
+	VirtualBox-${VBOX_VERSION} \
+	kernel-devel \
+	elfutils-libelf-devel \
+	gcc \
+	perl \
+	make
+    /sbin/vboxconfig
+    
     # Install Vagrant
-    yum install -y yum-utils
-    yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
-    yum -y install vagrant git make kernel-devel
+    dnf install -y dnf-utils
+    dnf-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+    dnf -y install vagrant
 
 elif [ -e "/etc/debian_version" ]
 then
@@ -45,21 +50,20 @@ then
     echo "*** WARNING:  THIS IS UNTESTED***"
     echo
 
-    apt -y update
-    apt -y upgrade
+    apt update
 
-    # TODO: Install VirtualBox
+    # Required for VirtualBox
+    apt -y install git make kernel-devel
     
+    # Install Vagrant
     curl -s https://apt.releases.hashicorp.com/gpg \
 	| gpg --dearmor \
 	> tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-
     echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg]" \
 	 "https://apt.releases.hashicorp.com $(lsb_release -cs) main" \
 	> /etc/apt/sources.list.d/hashicorp.list
-
     apt update
-    apt -y install vagrant git make kernel-devel
+    apt -y install vagrant
 
 else
 
@@ -67,10 +71,6 @@ else
 
 fi
 
-
-rm -f "/lib/modules/$(uname -r)/build"
-ln -s "/usr/src/kernels/$(uname -r)" "/lib/modules/$(uname -r)/build"
-/sbin/vboxconfig
 
 TESTBED_USER=testbed
 if ! getent passwd "${TESTBED_USER}" > /dev/null
