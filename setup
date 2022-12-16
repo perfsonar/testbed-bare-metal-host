@@ -38,8 +38,11 @@ then
     
     # Install Vagrant
     dnf install -y dnf-utils
-    dnf-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+    yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
     dnf -y install vagrant
+
+    # Install Git
+    dnf -y install git
 
 elif [ -e "/etc/debian_version" ]
 then
@@ -47,18 +50,21 @@ then
     echo "Setting up something Debian-flavored"
 
     echo
-    echo "*** WARNING:  THIS IS UNTESTED***"
+    echo "*** WARNING: THIS IS NOT FULLY TESTED ***"
     echo
 
-    apt update
+    # Install and configure VirtualBox
+    echo "deb https://download.virtualbox.org/virtualbox/debian $(lsb_release -cs) contrib" \
+	 > /etc/apt/sources.list.d/virtualbox.list
+    curl -s https://www.virtualbox.org/download/oracle_vbox_2016.asc | apt-key add -
+    curl -s https://www.virtualbox.org/download/oracle_vbox.asc | apt-key add -
+    apt-get -y update
+    apt-get -y install "virtualbox-${VBOX_VERSION}"
 
-    # Required for VirtualBox
-    apt -y install git make kernel-devel
-    
     # Install Vagrant
     curl -s https://apt.releases.hashicorp.com/gpg \
 	| gpg --dearmor \
-	> tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
+	> /usr/share/keyrings/hashicorp-archive-keyring.gpg
     echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg]" \
 	 "https://apt.releases.hashicorp.com $(lsb_release -cs) main" \
 	> /etc/apt/sources.list.d/hashicorp.list
