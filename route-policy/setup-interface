@@ -81,7 +81,6 @@ fi
 # The global default is still out this interface
 if ${GLOBAL_DEFAULT_ROUTE}
 then
-    # TODO: Need to grep this out of the table before trying it.
     if do_ip route | egrep -q -e '^default\s+'
     then
 	do_ip route del default
