@@ -12,6 +12,12 @@
     "enp0s19"
     ],
 
+  "almalinux/9": [
+    # TODO: This has been "casually" verified.  This vagrant box has
+    # problems that prevent it from coming fully up.
+    # Vagrant uses enp0s3 for NAT
+    "enp0s8"
+    ],
   "centos/7": [
     # Vagrant uses eth0 for NAT
     "eth1",
