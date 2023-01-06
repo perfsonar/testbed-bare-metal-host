@@ -42,11 +42,11 @@ Log in as `root` and issue the following command:
 curl https://raw.githubusercontent.com/perfsonar/testbed-bare-metal-host/main/setup | sh -e
 ```
 
-Bcome the `testbed` user.
+Become the `testbed` user.
 
 `cd testbed-bare-metal-host`
 
-Create `config.yaml` based on the sample in theat directory.  Specific
+Create `config.yaml` based on the sample in that directory.  Specific
 instructions can be found in the sample file.
 
 Start the test bed running with `make up`.
