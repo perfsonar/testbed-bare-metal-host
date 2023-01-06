@@ -81,7 +81,7 @@ fi
 TESTBED_USER=testbed
 if ! getent passwd "${TESTBED_USER}" > /dev/null
 then
-    useradd -c 'perfSONAR Testbed' testbed
+    useradd -c 'perfSONAR Testbed' -m testbed
 fi
 
 su - "${TESTBED_USER}" -c "vagrant plugin install netaddr"
