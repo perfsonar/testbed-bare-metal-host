@@ -203,6 +203,10 @@ Vagrant.configure("2") do |vc|
             useradd --system -c "Ansible" "${ANSIBLE_USER}"
         fi
 
+        # Ansible gets frictionless sudo
+        echo "${ANSIBLE_USER} ALL= (ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${ANSIBLE_USER}"
+	chmod 440 "/etc/sudoers.d/${ANSIBLE_USER}"
+	
         SSH_DIR=~ansible/.ssh
         mkdir -p "${SSH_DIR}"
         chmod 700 "${SSH_DIR}"
@@ -221,7 +225,12 @@ EOF
 
         # Disable SSH root login
         sed -i -e 's/PermitRootLogin.*$/PermitRootLogin no/g' /etc/ssh/sshd_config
-        systemctl restart sshd
+	systemctl restart sshd
+	
+        # Allow SSH from the outside
+        systemctl enable --now firewalld
+	firewall-cmd --permanent --add-service=ssh
+	firewall-cmd --reload
 
       SHELL
 
