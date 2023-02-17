@@ -15,7 +15,7 @@ require 'yaml'
 # Configuration
 #
 
-$config = YAML.load(File.read("config.yaml"))
+$config = YAML.load(File.read("config/config.yaml"))
 
 def get_with_default(config_bits, param)
   if config_bits == nil
@@ -25,7 +25,7 @@ def get_with_default(config_bits, param)
 end
 
 
-$box_interfaces = YAML.load(File.read("box-interfaces.yaml"))
+$box_interfaces = YAML.load(File.read("config/box-interfaces.yaml"))
 
 
 #
@@ -76,12 +76,71 @@ Vagrant.configure("2") do |vc|
 
       host.vm.box = get_with_default(host_config, "box")
       domain = get_with_default(host_config, "domain")
-
-      if $domain != nil
+      if domain != nil
         host.vm.hostname = "#{host_name}.#{$config["defaults"]["domain"]}"
       else
         host.vm.hostname = host_name
       end
+
+      #
+      # General Host
+      #
+
+      vc.vm.provision "hostname", type: "shell", run: "always", inline: <<-SHELL
+          set -e
+          echo "Changing hostname to #{host.vm.hostname}"
+          hostname "#{host.vm.hostname}"
+          echo "#{host.vm.hostname}" > /etc/hostname
+      SHELL
+
+      vc.vm.provision "debian-fixes", type: "shell", run: "always", inline: <<-SHELL
+          set -e
+
+          if ! [ -e /etc/debian_version ]
+          then
+              exit 0
+          fi
+
+          # TODO: Make sure trhis is right for Debian
+          apt -y install firewalld python-policycoreutils
+
+          case $(awk -F. '{ print $1 }' /etc/debian_version) in
+              10)
+                  # Debian 10 has a few buggy packages.
+                  echo 'deb https://deb.debian.org/debian bullseye-backports main' \
+                      > /etc/apt/sources.list.d/bullseye-backports.list
+                  apt-get update
+                  ;;
+              *)
+                  true
+                  ;;
+          esac
+
+          # TODO: D10's firewalld is buggy; needs >= 1.8.3 from buster-backports.
+          apt-get -y install firewalld
+
+      SHELL
+
+      vc.vm.provision "el-fixes", type: "shell", run: "always", inline: <<-SHELL
+          set -e
+
+          if ! [ -e /etc/redhat-release ]
+          then
+              exit 0
+          fi
+
+          MAJOR_RELEASE=$(sed -e 's/^.*release \\+//; s/\\..*$//' /etc/redhat-release)
+          case "${MAJOR_RELEASE}" in 
+              7)
+                  INSTALLER=yum
+                  ;;
+              *)
+                  INSTALLER=dnf
+                  ;;
+          esac
+          ${INSTALLER} -y install firewalld policycoreutils-python
+      SHELL
+
 
 
       #
@@ -92,6 +151,7 @@ Vagrant.configure("2") do |vc|
       libexec = "/usr/libexec/#{route_policy_service}"
 
       vc.vm.provision "route-policy-utils", type: "shell", run: "always", inline: <<-SHELL
+          set -e
           mkdir -p '#{libexec}'
 	  cp '/vagrant/route-policy/setup-interface' '#{libexec}'
           chmod 555 "#{libexec}/setup-interface"
@@ -100,7 +160,7 @@ Vagrant.configure("2") do |vc|
       route_table_base = 10
       route_table_num = route_table_base
 
-      $config["net"].each_with_index do |value, index|
+      $config["net"]["interfaces"].each_with_index do |value, index|
     
         host_if = value["bridge"]
 
@@ -161,7 +221,7 @@ Vagrant.configure("2") do |vc|
           end
   
           host.vm.provision "network-routing-#{guest_if}-ipv#{family}", type: "shell", run: "once", inline: <<-SHELL
-
+            set -e
             sed \
               -e 's|__PROGRAM__|#{libexec}/setup-interface|g' \
 	      -e 's|__GLOBAL_DEFAULT__|#{default_route_arg}|g' \
@@ -182,55 +242,62 @@ Vagrant.configure("2") do |vc|
 
         route_table_num += 1
 
-      end  # $config["net"].each do |key, value|
+      end  # $config["net"]["interfaces"].each do |key, value|
 
       host.vm.provision "hosts-scrub", type: "shell", run: "once", inline: <<-SHELL
+        set -e
         sed -i -e '/#{host.vm.hostname}/d' /etc/hosts
       SHELL
 
+      #
+      # Firewalld
+      #
+
+      vc.vm.provision "firewalld-#{host.vm.hostname}", type: "shell", run: "always", inline: <<-SHELL
+          set -e
+          systemctl enable --now firewalld
+      SHELL
+
+
 
       #
-      # Ansible
+      # SSH
       #
 
-      host.vm.provision "ansible-#{host.vm.hostname}", type:"shell", run: "always", inline: <<-SHELL
+      host.vm.provision "ssh", type:"shell", run: "always", inline: <<-SHELL
 
         set -e
 
-        ANSIBLE_USER="#{get_with_default(host_config,"ansible")["user"]}"
-        if ! getent passwd "${ANSIBLE_USER}" > /dev/null
-        then
-            useradd --system -c "Ansible" "${ANSIBLE_USER}"
-        fi
-
-        # Ansible gets frictionless sudo
-        echo "${ANSIBLE_USER} ALL= (ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${ANSIBLE_USER}"
-	chmod 440 "/etc/sudoers.d/${ANSIBLE_USER}"
-	
-        SSH_DIR=~ansible/.ssh
-        mkdir -p "${SSH_DIR}"
-        chmod 700 "${SSH_DIR}"
-        chown "${ANSIBLE_USER}.${ANSIBLE_USER}" "${SSH_DIR}"
-
-        AUTHORIZED_KEYS_BUILD="$(mktemp)"
-        chmod 600 "${AUTHORIZED_KEYS_BUILD}"
-        chown "${ANSIBLE_USER}.${ANSIBLE_USER}" "${AUTHORIZED_KEYS_BUILD}"
-
-        cat > "${AUTHORIZED_KEYS_BUILD}" <<EOF
-        #{get_with_default(host_config, "ansible")["keys"].join("\n")}
-EOF
-        sed -i -e 's/^[[:space:]]*//' "${AUTHORIZED_KEYS_BUILD}"
-
-        mv -f "${AUTHORIZED_KEYS_BUILD}" "${SSH_DIR}/authorized_keys"
-
         # Disable SSH root login
         sed -i -e 's/PermitRootLogin.*$/PermitRootLogin no/g' /etc/ssh/sshd_config
-	systemctl restart sshd
+
+        # Force-configure the default port
+        sed -i -e '/^\s*Port\s/d' /etc/ssh/sshd_config
+        echo "Port 22" >> /etc/ssh/sshd_config
 	
         # Allow SSH from the outside
-        systemctl enable --now firewalld
 	firewall-cmd --permanent --add-service=ssh
+
+        # If there's a secondary port defined, configure it.
+        echo PORT "#{$config["net"]["ssh"]["port"]}"
+        if [ "#{$config["net"]["ssh"]["port"]}" ]
+        then
+            echo "Adding port #{$config["net"]["ssh"]["port"]} to SSH"
+            echo "Port #{$config["net"]["ssh"]["port"]}" >> /etc/ssh/sshd_config
+            firewall-cmd --permanent --add-port="#{$config["net"]["ssh"]["port"]}/tcp"
+            # Semanage doesn't have 
+            if ! semanage port -l \
+                | fgrep ssh_port_t \
+                | sed -e 's/^.*tcp\\s\\+//; s/,\\s*/\\n/' \
+                | fgrep -qx '#{$config["net"]["ssh"]["port"]}'
+            then
+                semanage port -a -t ssh_port_t -p tcp #{$config["net"]["ssh"]["port"]}
+            fi
+        fi
+
+        # Restart everything involved
 	firewall-cmd --reload
+	systemctl restart sshd
 
       SHELL
 

@@ -39,14 +39,14 @@ Log in as `root` and bring the system up to date:
 
 Log in as `root` and issue the following command:
 ```
-curl https://raw.githubusercontent.com/perfsonar/testbed-bare-metal-host/main/setup | sh -e
+curl https://raw.githubusercontent.com/perfsonar/testbed-bare-metal-host/main/bin/setup | sh -e
 ```
 
 Become the `testbed` user.
 
 `cd testbed-bare-metal-host`
 
-Create `config.yaml` based on the sample in that directory.  Specific
-instructions can be found in the sample file.
+Create `config/config.yaml` based on the sample in that directory.
+Specific instructions can be found in the sample file.
 
 Start the test bed running with `make up`.

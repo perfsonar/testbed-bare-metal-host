@@ -32,6 +32,7 @@ then
 	kernel-devel \
 	elfutils-libelf-devel \
 	gcc \
+	git \
 	perl \
 	make
     /sbin/vboxconfig
@@ -70,6 +71,9 @@ then
 	> /etc/apt/sources.list.d/hashicorp.list
     apt update
     apt -y install vagrant
+
+    # Other niceties
+    apt -y install git
 
 else
 

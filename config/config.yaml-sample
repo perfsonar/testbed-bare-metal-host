@@ -1,0 +1,145 @@
+#
+# Sample perfSONAR Testbed System Configuration
+#
+
+# -----------------------------------------------------------------------------
+
+# VM Network Interfaces
+
+# This list describes interfaces on the guests that are bridged to
+# public-facing interfaces on the host for access to the Internet.
+# What those interfaces are varies by what Vagrant box is running and
+# is configured in box-interfaces.yaml.
+
+net:
+
+  interfaces:
+
+    # NOTE: This configuration uses IP blocks intended for documentation
+    # as examples and will not result in a useful VM because they are
+    # unlikely to be able to reach the Internet.
+
+    # Each of these interfaces will be given routing policy that gives
+    # any traffic originating on them will use that interface's gateway
+    # as a default route.  The VM's overall default route will remain
+    # the NAT interface provided by VirtualBox.
+
+    - bridge: enp6s0f0                  # Bridge to this interface on the host
+      ip:
+        4:
+          block: 192.0.2.0/29           # IPv4 network block
+          gateway: 192.0.2.1            # IPv4 gateway for this network
+          base: 2                       # First host in block to use for VMs
+          default: true                 # Point the global default route here.
+        6:
+          block: 2001:0db8:0001::/125   # IPv6 network block
+          gateway: 2001:0db8:0001::1    # IPv6 gateway for this network
+          base: 2                       # First host in block to use for VMs
+          default: true                 # Point the global default route here.
+
+    - bridge: enp6s0f1
+      ip:
+        # No IPv4 on this interface.
+        6:
+          block: 2001:0db8:0002::/125
+          gateway: 2001:0db8:0002::1
+          base: 2
+
+  # SSH from the outside
+  ssh:
+    # Port to listen on in addition to 22
+    port: 22022
+    accounts:
+      - login: "test"
+        keys:
+          - "ssh-rsa AAAAB3NzaC...NOT_A_VALID_KEY...ng1MZ8S9A Test Key 1"
+          - "ssh-rsa AAAABqP1fU...NOT_A_VALID_KEY...i39C8PEW7 Test Key 2"
+
+# -----------------------------------------------------------------------------
+
+# Host defaults.
+
+# These are default values for the parameters for every host specified
+# in the "hosts" section below.  They can be overridden in an
+# individual host's entry by providing an alternate value, e.g.:
+#
+#   hosts:
+#     host1:
+#       box: almalinux/8
+#       cpus: 6
+#       memory: 8192
+
+defaults:
+
+  # Set true to leave a placeholder for the host in the addressing
+  # scheme without configuring a VM.  
+  skip: false
+
+  # Basic VM attributes
+  box: generic/debian10
+  cpus: 4
+  memory: 4096
+
+  # Rebuild the VM once daily
+  rebuild: false
+
+  # DNS domain for the host
+  domain: ps.net.example.org
+
+  # perfSONAR Build Info
+  perfsonar:
+
+    # Role played by this host.  Should be one of testpoint, toolkit,
+    # archive, maddash, psconfig_publisher or web_admin
+    role: toolkit
+    
+    # What repository to use.  Should be one of:
+    # release or "(patch|minor|4.x)-(staging|snapshot)" for Debian/Ubuntu systems
+    # release, nightly-patch, nightly-minor or stagging for CentOS systems
+    # See https://github.com/perfsonar/ansible-role-perfsonar-installer/blob/master/defaults/main.yml
+    #
+    # NOTE: This varies by distribution and should become something
+    # more-coherent in the future.
+    release: patch-staging
+
+
+# -----------------------------------------------------------------------------
+
+# Configuration of hosts to be managed as VMs
+
+hosts:
+
+  # The smallest IP block reserved in the "net" section for this
+  # testbed is a /29, so there are a total of six hosts available,
+  # the first of which is the gateway.
+
+  # Note that all hosts will be named based on their name and the
+  # value of the 'domain' pair (e.g., host3.ps.net.example.org).
+
+  # Host 1 is the gateway, which is skipped because the networks are
+  # configured to start allocating from host 2.
+
+  # Host 2
+  argle:
+    # No changes from the defaults
+
+  # Host 3
+  bargle:
+    box: almalinux/8
+    rebuild: true
+
+  # Host 4
+  fargle:
+    # No changes from the defaults
+
+  # Host 5
+  gargle:
+    rebuild: true
+
+  # This is a placeholder for the remaining host in the block.  While
+  # not required, maintaining these helps understand the inventory of
+  # available addresses.
+
+  # Host 6
+  zargle:
+    skip: true

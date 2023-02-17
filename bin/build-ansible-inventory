@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+
+import sys
+import yaml
+
+config = yaml.safe_load(sys.stdin)
+
+
+
+perfsonar_defaults = config['defaults'].get('perfsonar', {})
+def get_with_perfsonar_defaults(entry, key):
+    return entry.get(key, perfsonar_defaults.get(key, None))
+
+
+roles = {}
+def roles_add(role, host, release):
+    role = 'ps_' + role
+    if role not in roles:
+        roles[role] = []
+    roles[role].append('%s perfsonar_release=%s' % (host, release))
+
+
+hosts = config['hosts']
+for host in hosts: 
+    host_attrs = hosts[host] or {}
+    perfsonar = host_attrs.get('perfsonar', {})
+    role = get_with_perfsonar_defaults(perfsonar, 'role')
+    release = get_with_perfsonar_defaults(perfsonar, 'release')
+    roles_add(role, host, release)
+
+
+print("""#
+# perfSONAR Bare-Metal Testbed Host Ansible Inventory
+#
+# This file is automatically-generated.
+#
+
+[all:vars]
+ansible_user=vagrant
+ansible_become=True
+ansible_become_user=root
+ansible_become_method=sudo
+""")
+
+for role, hosts in roles.items():
+    print('\n[%s]' % role)
+    print('\n'.join(hosts))

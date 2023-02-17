@@ -3,5 +3,8 @@
 # This will contain site-specific data.
 config.yaml
 
+*.log
+
 .vagrant
+vagrant-ssh-config
 *~
