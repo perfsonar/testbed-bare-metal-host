@@ -24,9 +24,14 @@ hosts = config['hosts']
 for host in hosts: 
     host_attrs = hosts[host] or {}
     perfsonar = host_attrs.get('perfsonar', {})
+    if perfsonar is None:
+        continue
     role = get_with_perfsonar_defaults(perfsonar, 'role')
     release = get_with_perfsonar_defaults(perfsonar, 'release')
-    roles_add(role, host, release)
+    if role is not None and release is not None:
+        roles_add(role, host, release)
+    else:
+        print("%s: perfSONAR is missing a role or release." % (host), file=sys.stderr)
 
 
 print("""#
