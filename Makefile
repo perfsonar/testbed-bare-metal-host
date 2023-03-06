@@ -88,10 +88,8 @@ destroy: cron-remove
 
 MESH_REPO_NAME=perfsonar-dev-mesh
 
-# TODO: Remove the cp command in this target.
 $(MESH_REPO_NAME):
 	git clone https://github.com/perfsonar/perfsonar-dev-mesh.git
-	cp /home/mfeit/work/perfsonar-dev-mesh/site.yml ./perfsonar-dev-mesh/site.yml
 	cd $@ && ansible-galaxy install -r requirements.yml
 TO_CLEAN += $(MESH_REPO_NAME)
 
@@ -99,7 +97,7 @@ MESH_REPO_INVENTORY := $(MESH_REPO_NAME)/inventory/hosts
 $(MESH_REPO_INVENTORY): $(MESH_REPO_NAME) $(CONFIG) FORCE
 	$(BIN)/build-ansible-inventory < $(CONFIG) > $@
 
-ansible: $(SSH_CONFIG) $(MESH_REPO_INVENTORY)
+ansible maintain: $(SSH_CONFIG) $(MESH_REPO_INVENTORY)
 	git -C $(MESH_REPO_NAME) pull
 	$(MAKE)  $(MESH_REPO_INVENTORY)
 	ANSIBLE_SSH_ARGS="-F $(SSH_CONFIG)" \
@@ -112,6 +110,7 @@ TO_CLEAN += ansible.log
 ansible-build-%: $(SSH_CONFIG)
 	echo $@ | sed -e s'/^ansible-build-//g'
 	false TODO: Build a single host by name
+
 
 #
 # Everything Else

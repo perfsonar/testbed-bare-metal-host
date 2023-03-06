@@ -50,3 +50,8 @@ Create `config/config.yaml` based on the sample in that directory.
 Specific instructions can be found in the sample file.
 
 Start the test bed running with `make up`.
+
+
+## Maintenance
+
+To run the Ansible playbooks against all hosts, run `make maintain`.
