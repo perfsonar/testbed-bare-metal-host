@@ -47,7 +47,7 @@ net:
 
   # SSH from the outside
   ssh:
-    # Port to listen on in addition to 22
+    # Port to listen on in addition to 22.  Set to null for no other ports.
     port: 22022
     accounts:
       - login: "test"
