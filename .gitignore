@@ -3,6 +3,8 @@
 # This will contain site-specific data.
 config.yaml
 
+perfsonar-dev-mesh
+
 *.log
 
 .vagrant
