@@ -24,7 +24,7 @@ hosts = config['hosts']
 for host in hosts: 
     host_attrs = hosts[host] or {}
     perfsonar = host_attrs.get('perfsonar', {})
-    if perfsonar is None:
+    if perfsonar is None or host_attrs.get('skip', False):
         continue
     role = get_with_perfsonar_defaults(perfsonar, 'role')
     release = get_with_perfsonar_defaults(perfsonar, 'release')
