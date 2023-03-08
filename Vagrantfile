@@ -73,6 +73,7 @@ Vagrant.configure("2") do |vc|
         vbox.cpus = get_with_default(host_config, "cpus")
         vbox.memory = get_with_default(host_config, "memory")
       end
+      host.disksize.size = get_with_default(host_config, "disk")
 
       host.vm.box = get_with_default(host_config, "box")
       domain = get_with_default(host_config, "domain")

@@ -75,10 +75,17 @@ defaults:
   # scheme without configuring a VM.  
   skip: false
 
-  # Basic VM attributes
+  # Vagrant box to run
   box: generic/debian10
+
+  # Number of cores
   cpus: 4
+
+  # Memory in MiB
   memory: 4096
+
+  # Storage in GB
+  disk: 20
 
   # Rebuild the VM once daily
   rebuild: false

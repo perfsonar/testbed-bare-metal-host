@@ -89,6 +89,7 @@ then
 fi
 
 su - "${TESTBED_USER}" -c "vagrant plugin install netaddr"
+su - "${TESTBED_USER}" -c "vagrant plugin install vagrant-disksize"
 
 TESTBED_HOME=$(getent passwd "${TESTBED_USER}" | cut -d: -f 6)
 su - "${TESTBED_USER}" -c "git -C '${TESTBED_HOME}' clone https://github.com/perfsonar/testbed-bare-metal-host.git"
