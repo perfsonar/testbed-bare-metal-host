@@ -280,7 +280,6 @@ Vagrant.configure("2") do |vc|
 	firewall-cmd --permanent --add-service=ssh
 
         # If there's a secondary port defined, configure it.
-        echo PORT "#{$config["net"]["ssh"]["port"]}"
         if [ "#{$config["net"]["ssh"]["port"]}" ]
         then
             echo "Adding port #{$config["net"]["ssh"]["port"]} to SSH"
