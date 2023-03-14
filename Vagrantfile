@@ -301,6 +301,46 @@ Vagrant.configure("2") do |vc|
 
       SHELL
 
+      #
+      # User Accounts
+      #
+
+      accounts = $config["net"]["ssh"].fetch("accounts", [])
+
+      accounts.each do |account|
+
+        login = account.fetch("login", nil)
+        if login == nil
+          continue
+        end
+        gecos = account.fetch("gecos", login)
+        sudo = account.fetch("sudo", false)
+        keys = account.fetch("keys", []).join("\n")
+        host.vm.provision "account-#{login}", type:"shell", run: "always", inline: <<-SHELL
+            set -e
+            if ! id '#{login}' > /dev/null 2>&1
+            then
+                echo "#{login}: Adding new user"
+                useradd -c '#{gecos}' '#{login}'
+            else
+                echo "#{login}: Using existing account"
+            fi
+            SSH=$(getent passwd '#{login}' | awk -F: '{ print $6 }')/.ssh
+            mkdir -p "${SSH}"
+            chmod 700 "${SSH}"
+            echo '#{keys}' > "${SSH}/authorized_keys"
+            chmod 400 "${SSH}/authorized_keys"
+            chown -R '#{login}.#{login}' "${SSH}"
+            if [ "#{sudo}" = "true" ]
+            then
+                echo "#{login}: Granting frictionless sudo"
+                echo '#{login} ALL=(ALL) NOPASSWD: ALL' > '/etc/sudoers.d/#{login}'
+                chmod 400 '/etc/sudoers.d/#{login}'
+            fi
+        SHELL
+
+      end  # accounts.each do |account|
+
     end  # vc.vm.define name
 
   end  # $config["hosts"].each
